@@ -1,0 +1,178 @@
+---
+title: 'Geo_dataset: practical work exercise 2'
+author: "Xènia Roda Sánchez"
+date: "5/28/2021"
+output:
+  html_document:
+    theme: yeti
+    df_print: paged
+subtitule: Nebulin deficiency effect on quadriceps/soleus
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(GEOquery)
+library(Biobase)
+library(knitr)
+library(limma)
+library(stringi)
+gse <- getGEO("GSE70213", GSEMatrix = TRUE)
+esetFromGeo <- gse[[1]]
+
+opts_chunk$set(echo = TRUE)
+```
+
+
+
+
+
+# Introduction
+
+My dataset, which name is Nebulin deficiency effect on the quadricepts, is an analysis of quadriceps muscles from 6 week old males with a conditional knockout of nebulin in their striated muscles. Nebulin is a giant filamentous protein that is coextensive with actin filaments of the skeletal muscle sarcomere. Results provide insight into the role of nebulin in adult muscles.
+
+Nebulin mutations are the main cause of nemaline myopathy (NEM), with typical NEM adult patients having low expression of nebulin, yet the roles of nebulin in adult muscle remain poorly understood.
+
+In this study to stablish nebulin's functional roles in adult muscle, they performed studies on a novel conditional nebulin KO (Neb cKO) mouse model, in which nebulin deletion was driven by the muscle creatine kinase (MCK) promotor.
+
+Neb cKO mice are born with high nebulin levels in their skeletical muscle but within weeks after birth, nebulin expression rapidly wass falling to barely detectable levels.
+
+A large fraction of the mice survives to adulthood with low nebulin levels (<5% of control), contain nemaline rods, and undergi fiber-trupe switching towards oxidative types. These microarrays investigate the changes in gene expression when nebulin os deficient.
+
+
+
+# Data of the study
+
+* organism: Mus musculus
+* DataSet record: GDS5880
+* Platform: GPL6246: [MoGene-1_0-st] Affymetrix Mouse Gene 1.0 ST Array [transcript (gene) version]
+* Reference Series: GSE70213
+* Sample count: 12
+* value type: count
+* Series published: 2015/06/25
+
+
+# Description of the study
+
+## Overall design
+
+Two skeletal muscle groups were studied: Quadriceps (which is markedly smaller in the Neb cKO mice relative to control) and Soleus (which is not significantly smaller in the Neb cKO relative to control). Six biological replicates for each muscle group were selected; all are age-matched males.
+
+## Treatment protocol
+
+Mice are homozygous for the conditional nebulin allele and are hemizygous for the muscle-specific MCK-Cre transgene (cKO) or lack the MCK-Cre transgene (Control).
+
+MCK-Cre transgenic mice have the Cre recombinase gene driven by the muscle creatine kinase promoter, and Cre activity is observed in skeletal and cardiac muscle. When bred with mice containing a loxP-flanked sequence of interest, Cre-mediated recombination will result in deletion of skeletal and cardiac muscle from the flanked genome.
+
+*Cre-Lox recombination*: is a site-specific recombinase technology, used to carry out deletions, insertions, translocations and inversions at specific sites in the DNA of cells. It allows the DNA modification to be targeted to a specific cell type or be triggered by a specific external stimulus.
+The activity of the Cre enzyme can be controlled so that it is expressed in a particular cell type or triggered by an external stimulus like a chemical signal or a heat shock. 
+
+## Growth protocol
+
+Mice are grown in a pathogen-free barrier facility with 12hr light:12hr dark cycle and are provided water and Teklad Global Rodent Diet (2919) ad libitum.
+
+## Extraction protocol
+
+The extracted molecule is the total RNA of the mice.
+Tissues were stored in Invitrogen RNAlater following manufacturer's protocol. Total RNA was isolated using Qiagen RNeasy fibrous tissue kit following the manufacturer's protocol.
+
+## Label protocol
+
+The samples were biotin-labelled using the Affymetrix GeneChip WT Plus reagant per manufacturer's protocol.
+
+*Biotin*: also called vitamin B7, is one of the B vitamins and it is involved in a wide range of metabolic processes, primarily related to the utilitzation of fats, carbohydrates, and amino acids.
+
+## Hybridazation / Scan protocol
+
+Samples were hybridized at 45C 17hours using the Affymetrix GeneChip Hybridization Buffers in with the Affymetrix Hyb Oven 645 and Fluidics Station 450. And Affymetrix Scanner 3000 7G was used to scan the GeneChips using Affymetrix GeneChip Console. 
+
+
+\newpage
+
+
+# Experimental design 
+
+As I said before, two skeletal muscle groups were studied: Quadriceps and Soleus which they made six biological replicates for each muscle group.
+
+At the end we have for quadriceps 6 treatments replicates groups and 6 control groups, and the same for soleus.
+
+In this study I will make **4 comparisons**:
+- comparison between quadcKO1 and quadcontrol
+- comparison between soleuscKO1 and soleuscontr
+- comparison between quadcK01 and soleuscK01   (both treatments)
+- comparison between quadcontrol and soleuscontr (both controls)
+  
+This are the principle design comparisons that I will make, but also it will be good to do the same with the others replicates.
+
+
+# Design matrix
+
+```{r}
+groups <- substr(pData(esetFromGeo)$title,1,12)
+groups <- stri_replace_all_regex(groups,"-","")
+
+targets <- data.frame(groups)
+
+design <-model.matrix(~ 0+targets$groups)
+colnames(design) <- sort(unique(groups))
+rownames(design) <- rownames(targets)
+design
+
+
+
+```
+
+
+
+
+
+# Contrast matrix
+
+```{r}
+contMat <- makeContrasts (
+  quad = quadcKO1 - quadcontrol,
+  sol = soleuscKO1 - soleuscontr,
+  both_treat = quadcKO1 - soleuscKO1,
+  both_control = quadcontrol - soleuscontr,
+    levels = design
+)
+
+contMat
+```
+
+# Differentially expressed genes 
+```{r}
+
+fit <- lmFit(esetFromGeo,design)
+fit.main <- contrasts.fit(fit, contMat)
+fit.main <- eBayes(fit.main)
+
+table_quad <- topTable(fit.main, number=nrow(fit.main), coef = "quad", adjust="fdr")
+head(table_quad)
+
+table_sol <- topTable(fit.main, number=nrow(fit.main), coef = "sol", adjust="fdr")
+head(table_sol)
+
+table_both_treat <- topTable(fit.main, number=nrow(fit.main), coef = "both_treat", adjust="fdr")
+head(table_both_treat)
+
+table_both_control <- topTable(fit.main, number=nrow(fit.main), coef = "both_control", adjust="fdr")
+head(table_both_control)
+
+
+
+
+```
+
+# Volcano plot
+```{r}
+volcanoplot(fit.main, coef = "quad", highlight = 10 ,main = paste("Differentially expressed genes") )
+
+volcanoplot(fit.main, coef = "sol", highlight = 10 ,main = paste("Differentially expressed genes") )
+
+volcanoplot(fit.main, coef = "both_treat", highlight = 10 ,main = paste("Differentially expressed genes") )
+
+volcanoplot(fit.main, coef = "both_control", highlight = 10 ,main = paste("Differentially expressed genes") )
+```
+
+
+
